@@ -16,7 +16,7 @@ export default function Detail({
     isValidating,
     mutate,
   } = useSWR<SuccessResponse<Storage>>({
-    url: `/storage?prefix=contents/${params.name ? `${params.name.join("/")}/` : ""}`,
+    url: `/storage?prefix=contents/${Array.isArray(params.name) ? `${params.name.join("/")}/` : ""}`,
     method: "GET",
     token,
   });
