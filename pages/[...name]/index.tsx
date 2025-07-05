@@ -2,11 +2,13 @@ import Layout from "@/components/Layout";
 import { SuccessResponse } from "@/types/global.type";
 import { Storage } from "@/types/storage.type";
 import { GetServerSideProps, InferGetServerSidePropsType } from "next";
+import { ParsedUrlQuery } from "querystring";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 
-export default function Home({
+export default function Detail({
   token,
+  params,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const {
     data: dataStorage,
@@ -14,7 +16,7 @@ export default function Home({
     isValidating,
     mutate,
   } = useSWR<SuccessResponse<Storage>>({
-    url: "/storage?prefix=contents/",
+    url: `/storage?prefix=contents/${params.name ? `${params.name.join("/")}/` : ""}`,
     method: "GET",
     token,
   });
@@ -66,10 +68,12 @@ export default function Home({
 
 export const getServerSideProps: GetServerSideProps<{
   token: string;
-}> = async ({ req }) => {
+  params: ParsedUrlQuery;
+}> = async ({ req, params }) => {
   return {
     props: {
       token: req.headers["access_token"] as string,
+      params: params as ParsedUrlQuery,
     },
   };
 };
