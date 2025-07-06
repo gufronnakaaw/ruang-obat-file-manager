@@ -399,7 +399,7 @@ export default function Layout({
                       }}
                     >
                       {getFileIcon(file.Key)}
-                      <span className="max-w-[200px] break-words">
+                      <span className="max-w-[300px] break-words">
                         {stripPrefix(file.Key, prefix)}
                       </span>
                     </td>
