@@ -13,6 +13,7 @@
     "axios": "^1.10.0",
     "next": "15.3.5",
     "next-auth": "^4.24.11",
+    "nextjs-progressbar": "^0.0.16",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
