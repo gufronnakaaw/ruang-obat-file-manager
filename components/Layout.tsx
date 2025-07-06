@@ -355,7 +355,7 @@ export default function Layout({
             Refresh
           </button>
         </div>
-        <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
           <table className="min-w-full table-auto border-collapse text-sm">
             <thead className="bg-gray-100 text-xs font-medium tracking-wider text-gray-500 uppercase">
               <tr>
@@ -399,7 +399,9 @@ export default function Layout({
                       }}
                     >
                       {getFileIcon(file.Key)}
-                      {stripPrefix(file.Key, prefix)}
+                      <span className="max-w-[200px] break-words">
+                        {stripPrefix(file.Key, prefix)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {file.Size ? formatFileSize(file.Size) : ""}
