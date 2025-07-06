@@ -32,14 +32,14 @@ export default function Breadcrumb({
   });
   return (
     <nav
-      className="flex rounded-lg border border-gray-200 bg-gray-50 px-5 py-3 text-gray-700 dark:border-gray-700 dark:bg-gray-800"
+      className="flex rounded-lg border border-gray-200 bg-gray-50 px-5 py-3 text-gray-700"
       aria-label="Breadcrumb"
     >
       <ol className="inline-flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse">
         <li className="inline-flex items-center">
           <Link
             href={basePath}
-            className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white"
+            className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600"
           >
             <svg
               className="me-2.5 h-3 w-3"
@@ -59,7 +59,7 @@ export default function Breadcrumb({
             <li className="inline-flex items-center" key={breadcrumb.key}>
               <Link
                 href={breadcrumb.href}
-                className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white"
+                className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600"
               >
                 <svg
                   className="mx-1 h-3 w-3 text-gray-400 rtl:rotate-180"
