@@ -249,7 +249,7 @@ export default function Layout({
 
   async function handleDownloadFile(key: string) {
     try {
-      const res = await fetch(`https://${bucket}.is3.cloudhost.id/${key}`);
+      const res = await fetch(`https://is3.cloudhost.id/${bucket}/${key}`);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
 
@@ -392,7 +392,7 @@ export default function Layout({
                           });
                         } else {
                           window.open(
-                            `https://${bucket}.is3.cloudhost.id/${file.Key}`,
+                            `https://is3.cloudhost.id/${bucket}/${file.Key}`,
                             "_blank",
                           );
                         }
@@ -415,7 +415,7 @@ export default function Layout({
                             onClick={async () => {
                               try {
                                 await navigator.clipboard.writeText(
-                                  `https://${bucket}.is3.cloudhost.id/${file.Key}`,
+                                  `https://is3.cloudhost.id/${bucket}/${file.Key}`,
                                 );
                                 toast.success("Link copied! 📋");
                               } catch (err) {
