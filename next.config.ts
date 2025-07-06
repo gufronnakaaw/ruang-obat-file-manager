@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   trailingSlash: true,
+  experimental: {
+    optimizePackageImports: ["@phosphor-icons/react", "react-hot-toast"],
+  },
 };
 
 export default nextConfig;
