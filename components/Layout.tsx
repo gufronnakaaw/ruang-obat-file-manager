@@ -1,7 +1,12 @@
-import { stripPrefix } from "@/utils/string.util";
+import { SuccessResponse } from "@/types/global.type";
+import { fetcher } from "@/utils/fetcher";
+import {
+  formatDateFancy,
+  formatFileSize,
+  stripPrefix,
+} from "@/utils/string.util";
 import {
   ArrowsCounterClockwiseIcon,
-  CloudArrowUpIcon,
   DownloadSimpleIcon,
   FileIcon,
   FileImageIcon,
@@ -12,7 +17,10 @@ import {
   LinkIcon,
   TrashIcon,
 } from "@phosphor-icons/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
+import { ChangeEvent, DragEvent, useState } from "react";
+import toast from "react-hot-toast";
 import { KeyedMutator } from "swr";
 import Breadcrumb from "./Breadcrumb";
 import EmptyRow from "./EmptyRow";
@@ -64,11 +72,289 @@ export default function Layout({
   bucket,
 }: LayoutProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+
+  const [uploadedFiles, setUploadedFiles] = useState<
+    { name: string; progress: number; is_loading: boolean }[]
+  >([]);
+  const [requests, setRequests] = useState<XMLHttpRequest[]>([]);
+  const [value, setValue] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [loadingFolder, setLoadingFolder] = useState(false);
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+
+    handleUploadAll(Array.from(e.dataTransfer.files));
+  }
+
+  function handleFiles(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    handleUploadAll(Array.from(files));
+  }
+
+  async function handleUploadAll(files: File[]) {
+    setUploadedFiles(
+      files.map((file) => ({
+        name: file.name,
+        progress: 0,
+        is_loading: true,
+      })),
+    );
+
+    try {
+      const response: SuccessResponse<{ key: string; url: string }[]> =
+        await fetcher({
+          url: "/storage/presigned",
+          method: "POST",
+          data: {
+            files: files.map((file) => ({
+              filename: file.name,
+              type: file.type,
+            })),
+            folder: prefix,
+            by: session?.user.fullname,
+          },
+          token: session?.user.access_token,
+        }).finally(() => {
+          setUploadedFiles((prev) =>
+            prev.map((f) => ({ ...f, is_loading: false })),
+          );
+        });
+
+      const newRequests: XMLHttpRequest[] = [];
+
+      files.forEach((file, i) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", response.data[i].url);
+        xhr.setRequestHeader("Content-Type", file.type);
+
+        xhr.upload.onprogress = (event) => {
+          const percent = Math.round((event.loaded / event.total) * 100);
+
+          setUploadedFiles((prev) =>
+            prev.map((f) =>
+              f.name === file.name ? { ...f, progress: percent } : f,
+            ),
+          );
+        };
+
+        xhr.onload = () => {
+          setUploadedFiles((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+          setRequests((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+
+          toast.success(`${file.name} uploaded`, {
+            position: "bottom-right",
+          });
+        };
+
+        xhr.onloadend = () => {
+          setUploadedFiles((prev) => {
+            const next = prev.filter((f) => f.name !== file.name);
+            if (next.length === 0) {
+              mutate();
+            }
+            return next;
+          });
+        };
+
+        xhr.onerror = () => {
+          setUploadedFiles((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+          setRequests((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+
+          toast.error(`${file.name} failed`, {
+            position: "bottom-right",
+          });
+        };
+
+        xhr.onabort = () => {
+          setUploadedFiles((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+          setRequests((prev) => {
+            const updated = [...prev];
+            updated.splice(i, 1);
+            return updated;
+          });
+
+          toast.error(`${file.name} canceled`, { position: "bottom-right" });
+        };
+
+        xhr.send(file);
+        newRequests.push(xhr);
+      });
+
+      setRequests(newRequests);
+    } catch (error) {
+      console.log(error);
+      setUploadedFiles([]);
+      toast.error("Failed to get presigned URLs");
+    }
+  }
+
+  function handleCancelAll() {
+    requests.forEach((xhr) => xhr.abort());
+  }
+
+  function handleCancelSingle(i: number) {
+    if (requests[i]) {
+      requests[i].abort();
+    }
+  }
+
+  async function handleDeleteFile(key: string, isFolder: boolean) {
+    try {
+      await fetcher({
+        url: `/storage?key=${key}&is_folder=${isFolder}`,
+        method: "DELETE",
+        token: session?.user.access_token,
+      });
+      mutate();
+      toast.success("File deleted successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete file");
+    }
+  }
+
+  async function handleDownloadFile(key: string) {
+    try {
+      const res = await fetch(`https://${bucket}.is3.cloudhost.id/${key}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = stripPrefix(key, prefix);
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.log(error);
+      toast.error("Failed to download file");
+    }
+  }
+
+  async function handleCreateFolder() {
+    setLoadingFolder(true);
+    try {
+      await fetcher({
+        url: "/storage/folders",
+        method: "POST",
+        token: session?.user.access_token,
+        data: { name: value, folder: prefix, by: session?.user.fullname },
+      });
+
+      mutate();
+      setValue("");
+      setIsOpen(false);
+
+      toast.success("Folder created successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create folder");
+    } finally {
+      setLoadingFolder(false);
+    }
+  }
+
+  const lastModified = data.length
+    ? data.reduce((latest, current) =>
+        new Date(current.LastModified as Date) >
+        new Date(latest?.LastModified as Date)
+          ? current
+          : latest,
+      ).LastModified
+    : null;
 
   return (
     <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-4">
-      <div className="lg:col-span-3">
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex w-full max-w-md flex-col gap-2 rounded-2xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-xl font-semibold">Create Folder</h2>
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="Folder name..."
+              className="w-full rounded-xl border border-neutral-300 px-4 py-2 focus:ring-2 focus:ring-black focus:outline-none"
+            />
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setValue("");
+                  setIsOpen(false);
+                }}
+                className="rounded-xl bg-gray-200 px-4 py-2 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                disabled={!value.trim() || loadingFolder}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 lg:col-span-3">
         <Breadcrumb basePath="/" rootLabel="Home" />
+
+        <div className="flex items-end justify-end">
+          <button
+            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
+            onClick={() => setIsOpen(true)}
+          >
+            <FolderPlusIcon size={22} />
+            Create Folder
+          </button>
+          <button
+            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
+            onClick={() => mutate()}
+            disabled={isLoading || isValidating}
+          >
+            <ArrowsCounterClockwiseIcon
+              size={22}
+              className={isLoading || isValidating ? "animate-spin" : ""}
+            />
+            Refresh
+          </button>
+        </div>
         <div className="overflow-hidden rounded-lg bg-white shadow-sm">
           <table className="min-w-full table-auto border-collapse text-sm">
             <thead className="bg-gray-100 text-xs font-medium tracking-wider text-gray-500 uppercase">
@@ -102,7 +388,7 @@ export default function Layout({
                       onClick={() => {
                         if (file.IsFolder) {
                           router.push({
-                            pathname: `${router.asPath}${stripPrefix(file.Key, prefix)}`,
+                            pathname: `${router.asPath}/${stripPrefix(file.Key, prefix)}`,
                           });
                         } else {
                           window.open(
@@ -116,25 +402,55 @@ export default function Layout({
                       {stripPrefix(file.Key, prefix)}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {file.Size ? file.Size : ""}
+                      {file.Size ? formatFileSize(file.Size) : ""}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {`${file?.LastModified ? file?.LastModified : ""}`}
+                      {`${file?.LastModified ? formatDateFancy(file?.LastModified) : ""}`}
                     </td>
                     <td className="flex gap-2 px-4 py-3">
                       {!file.IsFolder ? (
                         <>
-                          <button className="text-gray-500 hover:text-blue-600">
+                          <button
+                            className="cursor-pointer text-gray-500 hover:text-blue-600"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  `https://${bucket}.is3.cloudhost.id/${file.Key}`,
+                                );
+                                toast.success("Link copied! 📋");
+                              } catch (err) {
+                                toast.error("Gagal copy!");
+                                console.error(err);
+                              }
+                            }}
+                          >
                             <LinkIcon size={18} />
                           </button>
-                          <button className="text-gray-500 hover:text-green-600">
+                          <button
+                            className="cursor-pointer text-gray-500 hover:text-green-600"
+                            onClick={() => handleDownloadFile(file.Key)}
+                          >
                             <DownloadSimpleIcon size={18} />
                           </button>
-                          <button className="text-gray-500 hover:text-red-600">
+                          <button
+                            className="cursor-pointer text-gray-500 hover:text-red-600"
+                            onClick={() =>
+                              handleDeleteFile(file.Key, file.IsFolder)
+                            }
+                          >
                             <TrashIcon size={18} />
                           </button>
                         </>
-                      ) : null}
+                      ) : (
+                        <button
+                          className="ml-auto cursor-pointer items-end justify-end text-gray-500 hover:text-red-600"
+                          onClick={() =>
+                            handleDeleteFile(file.Key, file.IsFolder)
+                          }
+                        >
+                          <TrashIcon size={18} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -145,34 +461,114 @@ export default function Layout({
           </table>
         </div>
       </div>
-      <div className="grid gap-2 lg:col-span-1">
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800">Progress</h2>
+
+      <div className="flex flex-col gap-2 lg:col-span-1">
+        <div className="flex h-70 flex-col rounded-lg bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-800">Progress</h2>
+
+            {uploadedFiles.length > 1 ? (
+              <button
+                className="text-sm text-red-600 hover:underline"
+                onClick={handleCancelAll}
+              >
+                Cancel All
+              </button>
+            ) : null}
+          </div>
+
+          {uploadedFiles.length ? (
+            <p className="mb-3 text-sm text-gray-500">
+              Uploading {uploadedFiles.length} files
+            </p>
+          ) : null}
+
+          <div className="h-full flex-1 overflow-y-auto pr-1">
+            {uploadedFiles.length ? (
+              <ul className="space-y-4">
+                {uploadedFiles.map((file, idx) => (
+                  <li key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="w-[200px] truncate text-sm text-gray-700">
+                        {file.name}
+                      </span>
+                      {file.is_loading ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                        </div>
+                      ) : (
+                        <button
+                          className="text-xs text-red-500 hover:underline"
+                          onClick={() => handleCancelSingle(idx)}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-200">
+                      <div
+                        className="h-2 rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${file.progress}%` }}
+                      ></div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <span className="text-sm text-gray-500 italic">
+                  No files being uploaded
+                </span>
+              </div>
+            )}
+          </div>
         </div>
+
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-800">
             Quick Actions
           </h2>
           <div className="space-y-2">
-            <button className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50">
-              <CloudArrowUpIcon size={22} />
-              Upload Files
-            </button>
-            <button
-              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
-              onClick={() => mutate()}
-              disabled={isLoading || isValidating}
+            <div
+              className="flex w-full items-center justify-center"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
-              <ArrowsCounterClockwiseIcon
-                size={22}
-                className={isLoading || isValidating ? "animate-spin" : ""}
-              />
-              Refresh
-            </button>
-            <button className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50">
-              <FolderPlusIcon size={22} />
-              Create Folder
-            </button>
+              <label
+                htmlFor="dropzone-file"
+                className="flex h-35 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500"
+              >
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <svg
+                    className="mb-4 h-8 w-8 text-gray-500 dark:text-gray-400"
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 20 16"
+                  >
+                    <path
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+                    />
+                  </svg>
+                  <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-semibold">Click to upload</span> or
+                    drag and drop
+                  </p>
+                </div>
+                <input
+                  id="dropzone-file"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFiles}
+                  multiple
+                />
+              </label>
+            </div>
           </div>
 
           <div className="mt-6">
@@ -182,14 +578,48 @@ export default function Layout({
             <div className="space-y-3 text-sm text-gray-600">
               <div className="flex justify-between">
                 <span>Total Files:</span>
-                <span id="total-files" className="font-medium">
-                  {data.filter((item) => !item.IsFolder).length}
+                <span className="font-medium">
+                  {isLoading || isValidating ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                    </div>
+                  ) : (
+                    data.filter((item) => !item.IsFolder).length
+                  )}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Total Size:</span>
-                <span id="total-size" className="font-medium">
-                  0 MB
+                <span className="font-medium">
+                  {isLoading || isValidating ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                    </div>
+                  ) : data.length ? (
+                    formatFileSize(
+                      data.reduce((acc, item) => acc + (item.Size || 0), 0),
+                    )
+                  ) : (
+                    0
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last Modified</span>
+                <span className="font-medium">
+                  {isLoading || isValidating ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                    </div>
+                  ) : data.length ? (
+                    lastModified ? (
+                      formatDateFancy(lastModified)
+                    ) : (
+                      "-"
+                    )
+                  ) : (
+                    "-"
+                  )}
                 </span>
               </div>
             </div>
