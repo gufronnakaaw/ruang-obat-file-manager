@@ -60,6 +60,7 @@ export default function Home({
       mutate={mutate}
       isValidating={isValidating}
       bucket={dataStorage?.data?.Name || ""}
+      endpoint={dataStorage?.data?.Endpoint || ""}
     />
   );
 }

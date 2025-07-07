@@ -8,6 +8,7 @@ export interface Storage {
   MaxKeys: number;
   Name: string;
   Prefix: string;
+  Endpoint: string;
 }
 
 export interface Metadata {

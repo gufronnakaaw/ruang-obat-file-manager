@@ -10,14 +10,17 @@ import {
   DownloadSimpleIcon,
   FileIcon,
   FileImageIcon,
+  FilesIcon,
   FileTextIcon,
   FileVideoIcon,
   FolderPlusIcon,
   FolderSimpleIcon,
   LinkIcon,
+  SignOutIcon,
   TrashIcon,
+  XIcon,
 } from "@phosphor-icons/react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { ChangeEvent, DragEvent, useState } from "react";
 import toast from "react-hot-toast";
@@ -26,6 +29,7 @@ import Breadcrumb from "./Breadcrumb";
 import EmptyRow from "./EmptyRow";
 import FolderBack from "./FolderBack";
 import LoadingRow from "./LoadingRow";
+import ModalConfirm from "./ModalConfirm";
 
 function getFileIcon(name: string) {
   const lowerName = name.toLowerCase();
@@ -61,6 +65,7 @@ type LayoutProps = {
   prefix: string;
   mutate: KeyedMutator<any>;
   bucket: string;
+  endpoint: string;
 };
 
 export default function Layout({
@@ -70,6 +75,7 @@ export default function Layout({
   mutate,
   isValidating,
   bucket,
+  endpoint,
 }: LayoutProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -81,6 +87,16 @@ export default function Layout({
   const [value, setValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [loadingFolder, setLoadingFolder] = useState(false);
+  const [modalConfirmState, setModalConfirmState] = useState<{
+    open: boolean;
+    key: string;
+    isFolder: boolean;
+  }>({
+    open: false,
+    key: "",
+    isFolder: false,
+  });
+  const [isOpenUpload, setIsOpenUpload] = useState(false);
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -92,6 +108,7 @@ export default function Layout({
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
+    setIsOpenUpload(false);
 
     handleUploadAll(Array.from(e.dataTransfer.files));
   }
@@ -102,6 +119,7 @@ export default function Layout({
       return;
     }
 
+    setIsOpenUpload(false);
     handleUploadAll(Array.from(files));
   }
 
@@ -234,22 +252,38 @@ export default function Layout({
 
   async function handleDeleteFile(key: string, isFolder: boolean) {
     try {
-      await fetcher({
-        url: `/storage?key=${key}&is_folder=${isFolder}`,
-        method: "DELETE",
-        token: session?.user.access_token,
-      });
+      setModalConfirmState((prev) => ({ ...prev, open: false }));
+
+      await toast.promise(
+        fetcher({
+          url: `/storage?key=${encodeURIComponent(key)}&is_folder=${isFolder}`,
+          method: "DELETE",
+          token: session?.user.access_token,
+        }),
+        {
+          loading: `Deleting ${isFolder ? "folder" : "file"}...`,
+          success: `${isFolder ? "Folder" : "File"} deleted successfully`,
+          error: `Failed to delete ${isFolder ? "folder" : "file"}`,
+        },
+      );
+
       mutate();
-      toast.success("File deleted successfully");
     } catch (error) {
       console.error(error);
-      toast.error("Failed to delete file");
+    } finally {
+      setModalConfirmState({
+        open: false,
+        key: "",
+        isFolder: false,
+      });
     }
   }
 
   async function handleDownloadFile(key: string) {
     try {
-      const res = await fetch(`https://is3.cloudhost.id/${bucket}/${key}`);
+      const res = await fetch(
+        `${endpoint}/${bucket}/${encodeURIComponent(key)}`,
+      );
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
 
@@ -271,7 +305,11 @@ export default function Layout({
         url: "/storage/folders",
         method: "POST",
         token: session?.user.access_token,
-        data: { name: value, folder: prefix, by: session?.user.fullname },
+        data: {
+          name: value.trim(),
+          folder: prefix,
+          by: session?.user.fullname,
+        },
       });
 
       mutate();
@@ -316,13 +354,13 @@ export default function Layout({
                   setValue("");
                   setIsOpen(false);
                 }}
-                className="rounded-xl bg-gray-200 px-4 py-2 hover:bg-gray-300"
+                className="cursor-pointer rounded-xl bg-gray-200 px-4 py-2 hover:bg-gray-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateFolder}
-                className="rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                 disabled={!value.trim() || loadingFolder}
               >
                 Create
@@ -332,10 +370,89 @@ export default function Layout({
         </div>
       )}
 
+      {isOpenUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex w-full max-w-md flex-col gap-2 rounded-2xl bg-white p-6 shadow-lg">
+            <div className="relative space-y-2">
+              <button
+                className="absolute -top-5 -right-5 z-10 cursor-pointer rounded-full bg-gray-300 p-1 transition hover:bg-gray-300"
+                title="Cancel"
+              >
+                <XIcon size={15} onClick={() => setIsOpenUpload(false)} />
+              </button>
+
+              <div
+                className="flex w-full items-center justify-center"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <label
+                  htmlFor="dropzone-file"
+                  className="flex h-35 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100"
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg
+                      className="mb-4 h-8 w-8 text-gray-500"
+                      aria-hidden="true"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 20 16"
+                    >
+                      <path
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+                      />
+                    </svg>
+                    <p className="mb-2 text-sm text-gray-500">
+                      <span className="font-semibold">Click to upload</span> or
+                      drag and drop
+                    </p>
+                  </div>
+                  <input
+                    id="dropzone-file"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFiles}
+                    multiple
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalConfirmState.open && (
+        <ModalConfirm
+          onClose={() =>
+            setModalConfirmState({
+              open: false,
+              key: "",
+              isFolder: false,
+            })
+          }
+          handleDeleteFile={handleDeleteFile}
+          fileKey={modalConfirmState.key}
+          isFolder={modalConfirmState.isFolder}
+          prefix={prefix}
+        />
+      )}
+
       <div className="flex flex-col gap-2 lg:col-span-3">
         <Breadcrumb basePath="/" rootLabel="Home" />
 
         <div className="flex items-end justify-end">
+          <button
+            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
+            onClick={() => setIsOpenUpload(true)}
+          >
+            <FilesIcon size={22} />
+            Upload Files
+          </button>
           <button
             className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
             onClick={() => setIsOpen(true)}
@@ -384,7 +501,7 @@ export default function Layout({
                     className="border-b border-gray-200 hover:bg-gray-50"
                   >
                     <td
-                      className="flex cursor-pointer items-center px-4 py-3 font-medium text-gray-800"
+                      className="flex cursor-pointer items-center px-4 py-3 font-medium text-gray-800 select-none"
                       onClick={() => {
                         if (file.IsFolder) {
                           router.push({
@@ -392,14 +509,14 @@ export default function Layout({
                           });
                         } else {
                           window.open(
-                            `https://is3.cloudhost.id/${bucket}/${file.Key}`,
+                            `${endpoint}/${bucket}/${encodeURIComponent(file.Key)}`,
                             "_blank",
                           );
                         }
                       }}
                     >
                       {getFileIcon(file.Key)}
-                      <span className="max-w-[300px] break-words">
+                      <span className="max-w-[150px] break-words md:max-w-[500px]">
                         {stripPrefix(file.Key, prefix)}
                       </span>
                     </td>
@@ -417,11 +534,11 @@ export default function Layout({
                             onClick={async () => {
                               try {
                                 await navigator.clipboard.writeText(
-                                  `https://is3.cloudhost.id/${bucket}/${file.Key}`,
+                                  `${endpoint}/${bucket}/${encodeURIComponent(file.Key)}`,
                                 );
-                                toast.success("Link copied! 📋");
+                                toast.success("Link copied");
                               } catch (err) {
-                                toast.error("Gagal copy!");
+                                toast.error("Link copy failed");
                                 console.error(err);
                               }
                             }}
@@ -437,7 +554,11 @@ export default function Layout({
                           <button
                             className="cursor-pointer text-gray-500 hover:text-red-600"
                             onClick={() =>
-                              handleDeleteFile(file.Key, file.IsFolder)
+                              setModalConfirmState({
+                                open: true,
+                                key: file.Key,
+                                isFolder: file.IsFolder,
+                              })
                             }
                           >
                             <TrashIcon size={18} />
@@ -447,7 +568,11 @@ export default function Layout({
                         <button
                           className="ml-auto cursor-pointer items-end justify-end text-gray-500 hover:text-red-600"
                           onClick={() =>
-                            handleDeleteFile(file.Key, file.IsFolder)
+                            setModalConfirmState({
+                              open: true,
+                              key: file.Key,
+                              isFolder: file.IsFolder,
+                            })
                           }
                         >
                           <TrashIcon size={18} />
@@ -481,7 +606,8 @@ export default function Layout({
 
           {uploadedFiles.length ? (
             <p className="mb-3 text-sm text-gray-500">
-              Uploading {uploadedFiles.length} files
+              Uploading {uploadedFiles.length}{" "}
+              {uploadedFiles.length > 1 ? "files" : "file"}.
             </p>
           ) : null}
 
@@ -500,7 +626,7 @@ export default function Layout({
                         </div>
                       ) : (
                         <button
-                          className="text-xs text-red-500 hover:underline"
+                          className="cursor-pointer text-xs text-red-500 hover:underline"
                           onClick={() => handleCancelSingle(idx)}
                         >
                           Cancel
@@ -528,102 +654,89 @@ export default function Layout({
 
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-800">
-            Quick Actions
+            Bucket Stats
           </h2>
-          <div className="space-y-2">
-            <div
-              className="flex w-full items-center justify-center"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <label
-                htmlFor="dropzone-file"
-                className="flex h-35 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100"
-              >
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <svg
-                    className="mb-4 h-8 w-8 text-gray-500"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 20 16"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
-                    />
-                  </svg>
-                  <p className="mb-2 text-sm text-gray-500">
-                    <span className="font-semibold">Click to upload</span> or
-                    drag and drop
-                  </p>
-                </div>
-                <input
-                  id="dropzone-file"
-                  type="file"
-                  className="hidden"
-                  onChange={handleFiles}
-                  multiple
-                />
-              </label>
+          <div className="space-y-3 text-sm text-gray-600">
+            <div className="flex justify-between">
+              <span>Total Folders:</span>
+              <span className="font-medium">
+                {isLoading || isValidating ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                  </div>
+                ) : (
+                  data.filter((item) => item.IsFolder).length
+                )}
+              </span>
             </div>
-          </div>
-
-          <div className="mt-6">
-            <h2 className="mb-4 text-lg font-semibold text-gray-800">
-              Bucket Stats
-            </h2>
-            <div className="space-y-3 text-sm text-gray-600">
-              <div className="flex justify-between">
-                <span>Total Files:</span>
-                <span className="font-medium">
-                  {isLoading || isValidating ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                    </div>
-                  ) : (
-                    data.filter((item) => !item.IsFolder).length
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Size:</span>
-                <span className="font-medium">
-                  {isLoading || isValidating ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                    </div>
-                  ) : data.length ? (
-                    formatFileSize(
-                      data.reduce((acc, item) => acc + (item.Size || 0), 0),
-                    )
-                  ) : (
-                    0
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Last Modified</span>
-                <span className="font-medium">
-                  {isLoading || isValidating ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                    </div>
-                  ) : data.length ? (
-                    lastModified ? (
-                      formatDateFancy(lastModified)
-                    ) : (
-                      "-"
-                    )
+            <div className="flex justify-between">
+              <span>Total Files:</span>
+              <span className="font-medium">
+                {isLoading || isValidating ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                  </div>
+                ) : (
+                  data.filter((item) => !item.IsFolder).length
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total Size:</span>
+              <span className="font-medium">
+                {isLoading || isValidating ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                  </div>
+                ) : data.length ? (
+                  formatFileSize(
+                    data.reduce((acc, item) => acc + (item.Size || 0), 0),
+                  )
+                ) : (
+                  0
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Last Modified</span>
+              <span className="font-medium">
+                {isLoading || isValidating ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                  </div>
+                ) : data.length ? (
+                  lastModified ? (
+                    formatDateFancy(lastModified)
                   ) : (
                     "-"
-                  )}
-                </span>
-              </div>
+                  )
+                ) : (
+                  "-"
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-white p-4 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-gray-800">
+            Information
+          </h2>
+          <div className="space-y-3 text-sm text-gray-600">
+            <div className="flex justify-between">
+              <span>Login As</span>
+              <span className="font-medium">
+                {session?.user.fullname ? <>{session.user.fullname}</> : "-"}
+              </span>
+            </div>
+            <div className="flex justify-end">
+              <button
+                className="text-md flex cursor-pointer items-center gap-1 rounded-md text-blue-600"
+                onClick={() => signOut()}
+              >
+                <SignOutIcon size={18} />
+                Logout
+              </button>
             </div>
           </div>
         </div>
