@@ -86,7 +86,6 @@ export default function Layout({
   const [requests, setRequests] = useState<XMLHttpRequest[]>([]);
   const [value, setValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [loadingFolder, setLoadingFolder] = useState(false);
   const [modalConfirmState, setModalConfirmState] = useState<{
     open: boolean;
     key: string;
@@ -145,7 +144,7 @@ export default function Layout({
             folder: prefix,
             by: session?.user.fullname,
           },
-          token: session?.user.access_token,
+          type: "internal",
         }).finally(() => {
           setUploadedFiles((prev) =>
             prev.map((f) => ({ ...f, is_loading: false })),
@@ -258,7 +257,7 @@ export default function Layout({
         fetcher({
           url: `/storage?key=${encodeURIComponent(key)}&is_folder=${isFolder}`,
           method: "DELETE",
-          token: session?.user.access_token,
+          type: "internal",
         }),
         {
           loading: `Deleting ${isFolder ? "folder" : "file"}...`,
@@ -281,9 +280,30 @@ export default function Layout({
 
   async function handleDownloadFile(key: string) {
     try {
-      const res = await fetch(
-        `${endpoint}/${bucket}/${encodeURIComponent(key)}`,
-      );
+      let url = "";
+
+      if (router.asPath.includes("private")) {
+        const response: SuccessResponse<{ url: string }> = await toast.promise(
+          fetcher({
+            url: `/storage/signed?key=${encodeURIComponent(key)}`,
+            method: "GET",
+            type: "internal",
+          }),
+          {
+            loading: "Getting signed URL...",
+          },
+        );
+
+        url = response.data.url;
+      } else {
+        url = `https://${bucket}.is3.cloudhost.id/${encodeURIComponent(key)}`;
+      }
+
+      const res = await toast.promise(fetch(url), {
+        loading: "Downloading file...",
+        success: "File downloaded successfully",
+        error: "Failed to download file",
+      });
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
 
@@ -299,29 +319,53 @@ export default function Layout({
   }
 
   async function handleCreateFolder() {
-    setLoadingFolder(true);
+    setIsOpen(false);
     try {
-      await fetcher({
-        url: "/storage/folders",
-        method: "POST",
-        token: session?.user.access_token,
-        data: {
-          name: value.trim(),
-          folder: prefix,
-          by: session?.user.fullname,
+      await toast.promise(
+        fetcher({
+          url: "/storage/folders",
+          method: "POST",
+          data: {
+            name: value.trim(),
+            folder: prefix,
+            by: session?.user.fullname,
+          },
+          type: "internal",
+        }),
+        {
+          loading: "Creating folder...",
+          success: "Folder created successfully",
+          error: "Failed to create folder",
         },
-      });
+      );
 
       mutate();
       setValue("");
-      setIsOpen(false);
-
-      toast.success("Folder created successfully");
     } catch (error) {
       console.error(error);
       toast.error("Failed to create folder");
-    } finally {
-      setLoadingFolder(false);
+    }
+  }
+
+  async function getSignedUrl(key: string) {
+    try {
+      const response: SuccessResponse<{ url: string }> = await toast.promise(
+        fetcher({
+          url: `/storage/signed?key=${encodeURIComponent(key)}`,
+          method: "GET",
+          type: "internal",
+        }),
+        {
+          loading: "Getting signed URL...",
+          success: "Signed URL retrieved successfully",
+          error: "Failed to get signed URL",
+        },
+      );
+
+      return response.data.url;
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to get signed URL");
     }
   }
 
@@ -361,7 +405,7 @@ export default function Layout({
               <button
                 onClick={handleCreateFolder}
                 className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                disabled={!value.trim() || loadingFolder}
+                disabled={!value.trim()}
               >
                 Create
               </button>
@@ -446,20 +490,24 @@ export default function Layout({
         <Breadcrumb basePath="/" rootLabel="Home" />
 
         <div className="flex items-end justify-end">
-          <button
-            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
-            onClick={() => setIsOpenUpload(true)}
-          >
-            <FilesIcon size={22} />
-            Upload Files
-          </button>
-          <button
-            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
-            onClick={() => setIsOpen(true)}
-          >
-            <FolderPlusIcon size={22} />
-            Create Folder
-          </button>
+          {router.pathname !== "/" ? (
+            <>
+              <button
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
+                onClick={() => setIsOpenUpload(true)}
+              >
+                <FilesIcon size={22} />
+                Upload Files
+              </button>
+              <button
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
+                onClick={() => setIsOpen(true)}
+              >
+                <FolderPlusIcon size={22} />
+                Create Folder
+              </button>
+            </>
+          ) : null}
           <button
             className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
             onClick={() => mutate()}
@@ -498,20 +546,25 @@ export default function Layout({
                 data.map((file) => (
                   <tr
                     key={file.Key}
-                    className="border-b border-gray-200 hover:bg-gray-50"
+                    className="border-b border-gray-200 hover:bg-gray-100"
                   >
                     <td
                       className="flex cursor-pointer items-center px-4 py-3 font-medium text-gray-800 select-none"
-                      onClick={() => {
+                      onClick={async () => {
                         if (file.IsFolder) {
                           router.push({
                             pathname: `${router.asPath}/${stripPrefix(file.Key, prefix)}`,
                           });
                         } else {
-                          window.open(
-                            `${endpoint}/${bucket}/${encodeURIComponent(file.Key)}`,
-                            "_blank",
-                          );
+                          if (router.asPath.includes("private")) {
+                            const url = await getSignedUrl(file.Key);
+                            window.open(url, "_blank");
+                          } else {
+                            window.open(
+                              `https://${bucket}.is3.cloudhost.id/${encodeURIComponent(file.Key)}`,
+                              "_blank",
+                            );
+                          }
                         }
                       }}
                     >
@@ -534,7 +587,7 @@ export default function Layout({
                             onClick={async () => {
                               try {
                                 await navigator.clipboard.writeText(
-                                  `${endpoint}/${bucket}/${encodeURIComponent(file.Key)}`,
+                                  `https://${bucket}.is3.cloudhost.id/${encodeURIComponent(file.Key)}`,
                                 );
                                 toast.success("Link copied");
                               } catch (err) {
@@ -565,18 +618,22 @@ export default function Layout({
                           </button>
                         </>
                       ) : (
-                        <button
-                          className="ml-auto cursor-pointer items-end justify-end text-gray-500 hover:text-red-600"
-                          onClick={() =>
-                            setModalConfirmState({
-                              open: true,
-                              key: file.Key,
-                              isFolder: file.IsFolder,
-                            })
-                          }
-                        >
-                          <TrashIcon size={18} />
-                        </button>
+                        <>
+                          {router.pathname !== "/" ? (
+                            <button
+                              className="ml-auto cursor-pointer items-end justify-end text-gray-500 hover:text-red-600"
+                              onClick={() =>
+                                setModalConfirmState({
+                                  open: true,
+                                  key: file.Key,
+                                  isFolder: file.IsFolder,
+                                })
+                              }
+                            >
+                              <TrashIcon size={18} />
+                            </button>
+                          ) : null}
+                        </>
                       )}
                     </td>
                   </tr>
@@ -590,133 +647,139 @@ export default function Layout({
       </div>
 
       <div className="flex flex-col gap-2 lg:col-span-1">
-        <div className="flex h-70 flex-col rounded-lg bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-800">Progress</h2>
+        {router.pathname !== "/" ? (
+          <>
+            <div className="flex h-70 flex-col rounded-lg bg-white p-4 shadow-sm">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Progress
+                </h2>
 
-            {uploadedFiles.length > 1 ? (
-              <button
-                className="text-sm text-red-600 hover:underline"
-                onClick={handleCancelAll}
-              >
-                Cancel All
-              </button>
-            ) : null}
-          </div>
-
-          {uploadedFiles.length ? (
-            <p className="mb-3 text-sm text-gray-500">
-              Uploading {uploadedFiles.length}{" "}
-              {uploadedFiles.length > 1 ? "files" : "file"}.
-            </p>
-          ) : null}
-
-          <div className="h-full flex-1 overflow-y-auto pr-1">
-            {uploadedFiles.length ? (
-              <ul className="space-y-4">
-                {uploadedFiles.map((file, idx) => (
-                  <li key={idx} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="w-[200px] truncate text-sm text-gray-700">
-                        {file.name}
-                      </span>
-                      {file.is_loading ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                        </div>
-                      ) : (
-                        <button
-                          className="cursor-pointer text-xs text-red-500 hover:underline"
-                          onClick={() => handleCancelSingle(idx)}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-200">
-                      <div
-                        className="h-2 rounded-full bg-blue-500 transition-all"
-                        style={{ width: `${file.progress}%` }}
-                      ></div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <span className="text-sm text-gray-500 italic">
-                  No files being uploaded
-                </span>
+                {uploadedFiles.length > 1 ? (
+                  <button
+                    className="text-sm text-red-600 hover:underline"
+                    onClick={handleCancelAll}
+                  >
+                    Cancel All
+                  </button>
+                ) : null}
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-800">
-            Bucket Stats
-          </h2>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex justify-between">
-              <span>Total Folders:</span>
-              <span className="font-medium">
-                {isLoading || isValidating ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                  </div>
+              {uploadedFiles.length ? (
+                <p className="mb-3 text-sm text-gray-500">
+                  Uploading {uploadedFiles.length}{" "}
+                  {uploadedFiles.length > 1 ? "files" : "file"}.
+                </p>
+              ) : null}
+
+              <div className="h-full flex-1 overflow-y-auto pr-1">
+                {uploadedFiles.length ? (
+                  <ul className="space-y-4">
+                    {uploadedFiles.map((file, idx) => (
+                      <li key={idx} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="w-[200px] truncate text-sm text-gray-700">
+                            {file.name}
+                          </span>
+                          {file.is_loading ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                            </div>
+                          ) : (
+                            <button
+                              className="cursor-pointer text-xs text-red-500 hover:underline"
+                              onClick={() => handleCancelSingle(idx)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-gray-200">
+                          <div
+                            className="h-2 rounded-full bg-blue-500 transition-all"
+                            style={{ width: `${file.progress}%` }}
+                          ></div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
-                  data.filter((item) => item.IsFolder).length
-                )}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Total Files:</span>
-              <span className="font-medium">
-                {isLoading || isValidating ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                  <div className="flex h-full items-center justify-center">
+                    <span className="text-sm text-gray-500 italic">
+                      No files being uploaded
+                    </span>
                   </div>
-                ) : (
-                  data.filter((item) => !item.IsFolder).length
                 )}
-              </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span>Total Size:</span>
-              <span className="font-medium">
-                {isLoading || isValidating ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                  </div>
-                ) : data.length ? (
-                  formatFileSize(
-                    data.reduce((acc, item) => acc + (item.Size || 0), 0),
-                  )
-                ) : (
-                  0
-                )}
-              </span>
+
+            <div className="rounded-lg bg-white p-4 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">
+                Bucket Stats
+              </h2>
+              <div className="space-y-3 text-sm text-gray-600">
+                <div className="flex justify-between">
+                  <span>Total Folders:</span>
+                  <span className="font-medium">
+                    {isLoading || isValidating ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                      </div>
+                    ) : (
+                      data.filter((item) => item.IsFolder).length
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Files:</span>
+                  <span className="font-medium">
+                    {isLoading || isValidating ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                      </div>
+                    ) : (
+                      data.filter((item) => !item.IsFolder).length
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Size:</span>
+                  <span className="font-medium">
+                    {isLoading || isValidating ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                      </div>
+                    ) : data.length ? (
+                      formatFileSize(
+                        data.reduce((acc, item) => acc + (item.Size || 0), 0),
+                      )
+                    ) : (
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Last Modified</span>
+                  <span className="font-medium">
+                    {isLoading || isValidating ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                      </div>
+                    ) : data.length ? (
+                      lastModified ? (
+                        formatDateFancy(lastModified)
+                      ) : (
+                        "-"
+                      )
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span>Last Modified</span>
-              <span className="font-medium">
-                {isLoading || isValidating ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                  </div>
-                ) : data.length ? (
-                  lastModified ? (
-                    formatDateFancy(lastModified)
-                  ) : (
-                    "-"
-                  )
-                ) : (
-                  "-"
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
+          </>
+        ) : null}
 
         <div className="rounded-lg bg-white p-4 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-800">
