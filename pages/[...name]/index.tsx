@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 
 export default function Detail({
-  token,
   params,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const {
@@ -18,7 +17,7 @@ export default function Detail({
   } = useSWR<SuccessResponse<Storage>>({
     url: `/storage?prefix=contents/${Array.isArray(params.name) ? `${params.name.join("/")}/` : ""}`,
     method: "GET",
-    token,
+    type: "internal",
   });
 
   const [data, setData] = useState<
@@ -62,17 +61,16 @@ export default function Detail({
       mutate={mutate}
       isValidating={isValidating}
       bucket={dataStorage?.data?.Name || ""}
+      endpoint={dataStorage?.data?.Endpoint || ""}
     />
   );
 }
 
 export const getServerSideProps: GetServerSideProps<{
-  token: string;
   params: ParsedUrlQuery;
-}> = async ({ req, params }) => {
+}> = async ({ params }) => {
   return {
     props: {
-      token: req.headers["access_token"] as string,
       params: params as ParsedUrlQuery,
     },
   };

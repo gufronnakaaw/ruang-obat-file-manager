@@ -1,13 +1,10 @@
 import Layout from "@/components/Layout";
 import { SuccessResponse } from "@/types/global.type";
 import { Storage } from "@/types/storage.type";
-import { GetServerSideProps, InferGetServerSidePropsType } from "next";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 
-export default function Home({
-  token,
-}: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function Home() {
   const {
     data: dataStorage,
     isLoading,
@@ -16,7 +13,7 @@ export default function Home({
   } = useSWR<SuccessResponse<Storage>>({
     url: "/storage?prefix=contents/",
     method: "GET",
-    token,
+    type: "internal",
   });
 
   const [data, setData] = useState<
@@ -60,16 +57,7 @@ export default function Home({
       mutate={mutate}
       isValidating={isValidating}
       bucket={dataStorage?.data?.Name || ""}
+      endpoint={dataStorage?.data?.Endpoint || ""}
     />
   );
 }
-
-export const getServerSideProps: GetServerSideProps<{
-  token: string;
-}> = async ({ req }) => {
-  return {
-    props: {
-      token: req.headers["access_token"] as string,
-    },
-  };
-};

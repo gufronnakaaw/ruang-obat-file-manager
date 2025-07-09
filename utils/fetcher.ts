@@ -7,6 +7,7 @@ type FetcherParams = {
   token?: string;
   user_agent?: string;
   file?: boolean;
+  type: "internal" | "external";
 };
 
 export async function fetcher({
@@ -16,13 +17,21 @@ export async function fetcher({
   token,
   user_agent,
   file,
+  type,
 }: FetcherParams) {
-  const prefix = process.env.NEXT_PUBLIC_MODE == "dev" ? "dev" : "api";
-
   const options = {
-    url: `https://${prefix}.ruangobat.id/api` + url,
     method,
   };
+
+  if (type === "external") {
+    const prefix = process.env.NEXT_PUBLIC_MODE == "dev" ? "dev" : "api";
+
+    Object.assign(options, {
+      url: `https://${prefix}.ruangobat.id/api` + url,
+    });
+  } else {
+    Object.assign(options, { url: `/api${url}` });
+  }
 
   if (data) {
     Object.assign(options, { data });

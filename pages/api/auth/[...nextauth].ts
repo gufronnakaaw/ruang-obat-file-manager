@@ -30,6 +30,7 @@ export const authOptions: NextAuthOptions = {
             url: "/auth/login/admins",
             method: "POST",
             data: credentials,
+            type: "external",
           });
 
           return response.data;

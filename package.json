@@ -9,14 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.842.0",
+    "@aws-sdk/s3-request-presigner": "^3.842.0",
     "@phosphor-icons/react": "^2.1.10",
     "axios": "^1.10.0",
     "next": "15.3.5",
     "next-auth": "^4.24.11",
+    "nextjs-progressbar": "^0.0.16",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
-    "swr": "^2.3.4"
+    "swr": "^2.3.4",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
