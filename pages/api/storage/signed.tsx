@@ -33,7 +33,10 @@ export default async function handler(
   if (req.method === "GET") {
     try {
       const command = new GetObjectCommand({
-        Bucket: process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+        Bucket:
+          process.env.NEXT_PUBLIC_MODE === "prod"
+            ? "ruangobat"
+            : "ruangobatdev",
         Key: req.query.key as string,
         ResponseContentDisposition: "inline",
       });
