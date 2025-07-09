@@ -42,7 +42,10 @@ export default async function handler(
     try {
       const result = await s3.send(
         new PutObjectCommand({
-          Bucket: process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+          Bucket:
+            process.env.NEXT_PUBLIC_MODE === "prod"
+              ? "ruangobat"
+              : "ruangobatdev",
           Key: `${body.data.folder + body.data.name}/`,
           Body: Buffer.alloc(0),
           ACL: "public-read",

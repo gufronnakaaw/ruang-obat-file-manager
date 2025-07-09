@@ -30,7 +30,10 @@ export default async function handler(
     try {
       const result = await s3.send(
         new ListObjectsCommand({
-          Bucket: process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+          Bucket:
+            process.env.NEXT_PUBLIC_MODE === "prod"
+              ? "ruangobat"
+              : "ruangobatdev",
           Prefix: req.query.prefix as string,
           Delimiter: "/",
         }),
@@ -70,7 +73,10 @@ export default async function handler(
       if (req.query.is_folder === "true") {
         const objects = await s3.send(
           new ListObjectsCommand({
-            Bucket: process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+            Bucket:
+              process.env.NEXT_PUBLIC_MODE === "prod"
+                ? "ruangobat"
+                : "ruangobatdev",
             Prefix: body.data.key.endsWith("/")
               ? body.data.key
               : `${body.data.key}/`,
@@ -99,7 +105,9 @@ export default async function handler(
           await s3.send(
             new DeleteObjectsCommand({
               Bucket:
-                process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+                process.env.NEXT_PUBLIC_MODE === "prod"
+                  ? "ruangobat"
+                  : "ruangobatdev",
               Delete: {
                 Objects: keys,
               },
@@ -115,7 +123,10 @@ export default async function handler(
       } else {
         await s3.send(
           new DeleteObjectCommand({
-            Bucket: process.env.MODE === "prod" ? "ruangobat" : "ruangobatdev",
+            Bucket:
+              process.env.NEXT_PUBLIC_MODE === "prod"
+                ? "ruangobat"
+                : "ruangobatdev",
             Key: req.query.key as string,
           }),
         );
