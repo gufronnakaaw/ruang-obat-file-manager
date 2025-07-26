@@ -15,7 +15,9 @@ import {
   FileVideoIcon,
   FolderPlusIcon,
   FolderSimpleIcon,
+  GlobeHemisphereEastIcon,
   LinkIcon,
+  LockKeyIcon,
   SignOutIcon,
   TrashIcon,
   XIcon,
@@ -499,6 +501,7 @@ export default function Layout({
                 <FilesIcon size={22} />
                 Upload Files
               </button>
+
               <button
                 className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
                 onClick={() => setIsOpen(true)}
@@ -508,6 +511,7 @@ export default function Layout({
               </button>
             </>
           ) : null}
+
           <button
             className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-blue-600 transition-colors duration-200 hover:bg-blue-50"
             onClick={() => mutate()}
@@ -520,6 +524,7 @@ export default function Layout({
             Refresh
           </button>
         </div>
+
         <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
           <table className="min-w-full table-auto border-collapse text-sm">
             <thead className="bg-gray-100 text-xs font-medium tracking-wider text-gray-500 uppercase">
@@ -538,6 +543,7 @@ export default function Layout({
                 </th>
               </tr>
             </thead>
+
             <tbody>
               {router.pathname !== "/" ? <FolderBack router={router} /> : null}
               {isLoading || isValidating ? (
@@ -644,6 +650,38 @@ export default function Layout({
             </tbody>
           </table>
         </div>
+
+        {router.pathname == "/" && (
+          <div className="mt-6 grid items-start gap-8 rounded-xl border-2 border-yellow-600 bg-yellow-600/50 p-8 lg:grid-cols-2">
+            <div className="inline-flex items-start gap-4 text-yellow-900">
+              <LockKeyIcon weight="bold" size={48} />
+
+              <div className="grid flex-1 gap-1">
+                <h3 className="text-2xl font-bold">Folder Private</h3>
+                <p className="leading-[170%]">
+                  Berisi file atau data yang bersifat terbatas dan tidak untuk
+                  dibagikan ke publik seperti video-video pembelajaran,
+                  soft-file buku digital, dan lain-lain. Folder ini bersifat
+                  sensitif atau internal.
+                </p>
+              </div>
+            </div>
+
+            <div className="inline-flex items-start gap-4 text-yellow-900">
+              <GlobeHemisphereEastIcon weight="bold" size={48} />
+
+              <div className="grid flex-1 gap-1">
+                <h3 className="text-2xl font-bold">Folder Public</h3>
+                <p className="leading-[170%]">
+                  Berisi file atau aset yang memang ditujukan untuk diakses oleh
+                  publik seperti gambar flashcard, ilustrasi, dan lain-lain.
+                  Semua isi folder ini dapat dibagikan secara bebas tanpa
+                  batasan akses.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 lg:col-span-1">
