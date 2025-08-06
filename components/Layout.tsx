@@ -18,6 +18,7 @@ import {
   GlobeHemisphereEastIcon,
   LinkIcon,
   LockKeyIcon,
+  PencilIcon,
   SignOutIcon,
   TrashIcon,
   XIcon,
@@ -98,6 +99,16 @@ export default function Layout({
     isFolder: false,
   });
   const [isOpenUpload, setIsOpenUpload] = useState(false);
+  const [renameState, setRenameState] = useState<{
+    open: boolean;
+    oldKey: string;
+    isFolder: boolean;
+  }>({
+    open: false,
+    oldKey: "",
+    isFolder: false,
+  });
+  const [newName, setNewName] = useState("");
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -371,6 +382,49 @@ export default function Layout({
     }
   }
 
+  async function handleRename() {
+    try {
+      const oldKey = renameState.oldKey;
+      let newKey = oldKey;
+
+      if (renameState.isFolder) {
+        const parts = oldKey.replace(/\/$/, "").split("/");
+        parts[parts.length - 1] = newName;
+        newKey = parts.join("/") + "/";
+      } else {
+        const parts = oldKey.split("/");
+        const oldFileName = parts[parts.length - 1];
+        const extMatch = oldFileName.match(/\.[^\.]+$/);
+        const ext = extMatch ? extMatch[0] : "";
+        parts[parts.length - 1] = newName + ext;
+        newKey = parts.join("/");
+      }
+
+      await toast.promise(
+        fetcher({
+          url: "/storage/rename",
+          method: "POST",
+          data: {
+            oldKey,
+            newKey,
+            isFolder: renameState.isFolder,
+          },
+          type: "internal",
+        }),
+        {
+          loading: "Renaming...",
+          success: "Rename success",
+          error: "Rename failed",
+        },
+      );
+      setRenameState({ open: false, oldKey: "", isFolder: false });
+      setNewName("");
+      mutate();
+    } catch (err) {
+      toast.error("Rename failed");
+    }
+  }
+
   const lastModified = data.length
     ? data.reduce((latest, current) =>
         new Date(current.LastModified as Date) >
@@ -486,6 +540,41 @@ export default function Layout({
           isFolder={modalConfirmState.isFolder}
           prefix={prefix}
         />
+      )}
+
+      {renameState.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex w-full max-w-md flex-col gap-2 rounded-2xl bg-white p-6 shadow-lg">
+            <h2 className="mb-4 text-xl font-semibold">Rename</h2>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="New name or path..."
+              className="w-full rounded-xl border border-neutral-300 px-4 py-2 focus:ring-2 focus:ring-black focus:outline-none"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setRenameState({ open: false, oldKey: "", isFolder: false });
+                  setNewName("");
+                }}
+                className="cursor-pointer rounded-xl bg-gray-200 px-4 py-2 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await handleRename();
+                }}
+                className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                disabled={!newName.trim()}
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-2 lg:col-span-3">
@@ -605,6 +694,30 @@ export default function Layout({
                             <LinkIcon size={18} />
                           </button>
                           <button
+                            className="cursor-pointer text-gray-500 hover:text-yellow-600"
+                            onClick={() => {
+                              let nameOnly = file.Key;
+                              if (file.IsFolder) {
+                                nameOnly =
+                                  file.Key.replace(/\/$/, "")
+                                    .split("/")
+                                    .pop() || "";
+                              } else {
+                                const fileName =
+                                  file.Key.split("/").pop() || "";
+                                nameOnly = fileName.replace(/\.[^\.]+$/, ""); // hapus ekstensi
+                              }
+                              setRenameState({
+                                open: true,
+                                oldKey: file.Key,
+                                isFolder: file.IsFolder,
+                              });
+                              setNewName(nameOnly);
+                            }}
+                          >
+                            <PencilIcon size={18} />
+                          </button>
+                          <button
                             className="cursor-pointer text-gray-500 hover:text-green-600"
                             onClick={() => handleDownloadFile(file.Key)}
                           >
@@ -626,18 +739,47 @@ export default function Layout({
                       ) : (
                         <>
                           {router.pathname !== "/" ? (
-                            <button
-                              className="ml-auto cursor-pointer items-end justify-end text-gray-500 hover:text-red-600"
-                              onClick={() =>
-                                setModalConfirmState({
-                                  open: true,
-                                  key: file.Key,
-                                  isFolder: file.IsFolder,
-                                })
-                              }
-                            >
-                              <TrashIcon size={18} />
-                            </button>
+                            <div className="flex w-full justify-end gap-2">
+                              <button
+                                className="cursor-pointer text-gray-500 hover:text-yellow-600"
+                                onClick={() => {
+                                  let nameOnly = file.Key;
+                                  if (file.IsFolder) {
+                                    nameOnly =
+                                      file.Key.replace(/\/$/, "")
+                                        .split("/")
+                                        .pop() || "";
+                                  } else {
+                                    const fileName =
+                                      file.Key.split("/").pop() || "";
+                                    nameOnly = fileName.replace(
+                                      /\.[^\.]+$/,
+                                      "",
+                                    ); // hapus ekstensi
+                                  }
+                                  setRenameState({
+                                    open: true,
+                                    oldKey: file.Key,
+                                    isFolder: file.IsFolder,
+                                  });
+                                  setNewName(nameOnly);
+                                }}
+                              >
+                                <PencilIcon size={18} />
+                              </button>
+                              <button
+                                className="cursor-pointer text-gray-500 hover:text-red-600"
+                                onClick={() =>
+                                  setModalConfirmState({
+                                    open: true,
+                                    key: file.Key,
+                                    isFolder: file.IsFolder,
+                                  })
+                                }
+                              >
+                                <TrashIcon size={18} />
+                              </button>
+                            </div>
                           ) : null}
                         </>
                       )}
