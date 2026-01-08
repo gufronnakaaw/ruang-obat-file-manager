@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 import { fetcher } from "@/utils/fetcher";
+import { HeroUIProvider } from "@heroui/react";
 import { SessionProvider } from "next-auth/react";
 import type { AppProps } from "next/app";
 import NextNProgress from "nextjs-progressbar";
@@ -21,7 +22,9 @@ export default function App({
             revalidateOnFocus: false,
           }}
         >
-          <Component {...pageProps} />
+          <HeroUIProvider>
+            <Component {...pageProps} />
+          </HeroUIProvider>
         </SWRConfig>
       </SessionProvider>
     </>
