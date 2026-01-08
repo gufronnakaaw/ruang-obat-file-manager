@@ -1,16 +1,19 @@
+import { LogoRuangObat } from "@/components/LogoRuangObat";
 import { getError } from "@/utils/getError";
+import { Button, Input } from "@heroui/react";
 import {
   EyeIcon,
   EyeSlashIcon,
-  FolderIcon,
-  LockIcon,
+  ShieldCheckIcon,
   UserIcon,
 } from "@phosphor-icons/react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/router";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
 export default function Login() {
+  const router = useRouter();
   const [input, setInput] = useState<{
     admin_id: string;
     password: string;
@@ -18,10 +21,12 @@ export default function Login() {
     admin_id: "",
     password: "",
   });
+  const [loading, setLoading] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleLogin() {
+    setLoading(true);
     try {
       const response = await signIn("credentials", {
         ...input,
@@ -30,17 +35,18 @@ export default function Login() {
 
       if (response?.error) {
         const { error } = JSON.parse(response?.error);
-
+        setLoading(false);
         toast.error(error.message);
       }
 
       if (response?.ok) {
         toast.success("Yeay, anda berhasil login!");
-        return (window.location.href = "/");
+        setLoading(false);
+        return router.push("/");
       }
     } catch (error) {
+      setLoading(false);
       console.error(error);
-
       toast.error(getError(error));
     }
   }
@@ -50,93 +56,117 @@ export default function Login() {
   }
 
   return (
-    <div className="gradient-bg flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 overflow-hidden rounded-xl bg-white p-8 shadow-2xl sm:p-10">
-        <div className="text-center">
-          <div className="mb-6 flex justify-center">
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-blue-100">
-              <FolderIcon className="text-3xl text-blue-600" />
-              <div className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500">
-                <LockIcon className="text-xs text-white" />
+    <div className="flex min-h-screen bg-white">
+      <div className="hidden flex-col justify-between bg-[#6238C3] p-16 lg:flex lg:w-1/2">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white">
+            <LogoRuangObat className="h-9 w-9" />
+          </div>
+        </div>
+
+        <div className="max-w-lg space-y-8">
+          <div>
+            <h2 className="text-5xl leading-tight font-bold text-white">
+              RuangObat File Management System
+            </h2>
+          </div>
+        </div>
+
+        <div className="text-sm text-white/60">
+          © 2026 RuangObat. All rights reserved.
+        </div>
+      </div>
+
+      <div className="flex w-full items-center justify-center p-8 lg:w-1/2">
+        <div className="w-full max-w-md">
+          <div className="mb-12 flex flex-col items-center lg:hidden">
+            <div className="mb-8 flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl">
+                <LogoRuangObat className="h-12 w-12" />
               </div>
             </div>
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            RuangObat Files
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            File Management Untuk Ruang Obat
-          </p>
-        </div>
 
-        <div className="mt-8 space-y-6">
-          <div className="space-y-4 rounded-md">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Username
-              </label>
-              <div className="relative">
-                <input
-                  required
-                  className="input-focus relative block w-full rounded-lg border border-gray-300 px-4 py-3 pl-11 text-gray-900 placeholder-gray-500 focus:outline-none sm:text-sm"
-                  placeholder="Admin ID"
-                  onChange={(e) =>
-                    setInput({
-                      ...input,
-                      admin_id: e.target.value,
-                    })
-                  }
-                />
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <UserIcon className="text-gray-400" />
-                </div>
-              </div>
-            </div>
+          <div className="mb-10 text-center lg:text-left">
+            <h1 className="text-4xl font-bold text-gray-900">Welcome Back</h1>
+            <p className="mt-3 text-lg text-gray-600">
+              Sign in to manage and access RuangObat files
+            </p>
+          </div>
 
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  required
-                  className="input-focus relative block w-full rounded-lg border border-gray-300 px-4 py-3 pr-10 pl-11 text-gray-900 placeholder-gray-500 focus:outline-none sm:text-sm"
-                  placeholder="Password"
-                  onChange={(e) =>
-                    setInput({
-                      ...input,
-                      password: e.target.value,
-                    })
-                  }
+          <div className="grid gap-4">
+            <Input
+              type="text"
+              label="Admin ID"
+              placeholder="Enter your admin ID"
+              labelPlacement="outside"
+              startContent={
+                <UserIcon
+                  className="text-gray-500"
+                  size={22}
+                  weight="duotone"
                 />
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                  <LockIcon className="text-gray-400" />
-                </div>
-                <span
-                  className="toggle-password absolute top-1/2 right-2 -translate-y-1/2 transform cursor-pointer"
+              }
+              variant="bordered"
+              radius="lg"
+              size="lg"
+              classNames={{
+                input: "text-base",
+                inputWrapper:
+                  "border-2 border-gray-200 data-[hover=true]:border-gray-300 group-data-[focus=true]:border-[#6238C3] shadow-sm h-14",
+                label: "text-gray-800 font-semibold",
+              }}
+              onChange={(e) => setInput({ ...input, admin_id: e.target.value })}
+            />
+
+            <Input
+              type={showPassword ? "text" : "password"}
+              label="Password"
+              placeholder="Enter your password"
+              labelPlacement="outside"
+              autoComplete="current-password"
+              startContent={
+                <ShieldCheckIcon
+                  className="text-gray-500"
+                  size={22}
+                  weight="duotone"
+                />
+              }
+              endContent={
+                <button
+                  className="cursor-pointer text-gray-500 transition-colors hover:text-[#6238C3] focus:outline-none"
+                  type="button"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="text-gray-400" />
+                    <EyeSlashIcon size={22} />
                   ) : (
-                    <EyeIcon className="text-gray-400" />
+                    <EyeIcon size={22} />
                   )}
-                </span>
-              </div>
-            </div>
-          </div>
+                </button>
+              }
+              variant="bordered"
+              radius="lg"
+              size="lg"
+              classNames={{
+                input: "text-base",
+                inputWrapper:
+                  "border-2 border-gray-200 data-[hover=true]:border-gray-300 group-data-[focus=true]:border-[#6238C3] shadow-sm h-14",
+                label: "text-gray-800 font-semibold",
+              }}
+              onChange={(e) => setInput({ ...input, password: e.target.value })}
+            />
 
-          <div>
-            <button
-              type="submit"
-              className="btn-gradient group relative flex w-full justify-center rounded-lg border border-transparent px-4 py-3 text-sm font-medium text-white focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-              disabled={!isFormEmpty()}
-              onClick={handleLogin}
+            <Button
+              onPress={handleLogin}
+              isDisabled={!isFormEmpty() || loading}
+              className="h-14 w-full bg-[#6238C3] text-lg font-medium text-white shadow-lg transition-all hover:bg-[#7B4FDB] disabled:opacity-50 disabled:hover:bg-[#6238C3]"
+              radius="lg"
+              size="lg"
+              isLoading={loading}
             >
-              Login
-            </button>
+              Sign In
+            </Button>
           </div>
         </div>
       </div>
