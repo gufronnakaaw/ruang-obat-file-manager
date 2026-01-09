@@ -60,8 +60,6 @@ export default function Detail({
       prefix={dataStorage?.data?.Prefix || ""}
       mutate={mutate}
       isValidating={isValidating}
-      bucket={dataStorage?.data?.Name || ""}
-      endpoint={dataStorage?.data?.Endpoint || ""}
     />
   );
 }

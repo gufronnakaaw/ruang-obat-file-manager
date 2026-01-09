@@ -56,8 +56,6 @@ export default function Home() {
       prefix={dataStorage?.data?.Prefix || ""}
       mutate={mutate}
       isValidating={isValidating}
-      bucket={dataStorage?.data?.Name || ""}
-      endpoint={dataStorage?.data?.Endpoint || ""}
     />
   );
 }
