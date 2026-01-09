@@ -33,3 +33,11 @@ export function formatDateFancy(dateStr: string | Date): string {
     timeZone: "Asia/Jakarta",
   });
 }
+
+export function getStorageUrl() {
+  if (process.env.NEXT_PUBLIC_VHOST_SUPPORTED === "true") {
+    return `https://${process.env.NEXT_PUBLIC_STORAGE_BUCKET}.${process.env.NEXT_PUBLIC_STORAGE_ENDPOINT}`;
+  } else {
+    return `https://${process.env.NEXT_PUBLIC_STORAGE_ENDPOINT}/${process.env.NEXT_PUBLIC_STORAGE_BUCKET}`;
+  }
+}
