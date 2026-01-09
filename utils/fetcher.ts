@@ -24,7 +24,8 @@ export async function fetcher({
   };
 
   if (type === "external") {
-    const prefix = process.env.NEXT_PUBLIC_MODE == "dev" ? "dev" : "api";
+    const prefix =
+      process.env.NEXT_PUBLIC_MODE === "production" ? "api" : "dev";
 
     Object.assign(options, {
       url: `https://${prefix}.ruangobat.id/api` + url,
