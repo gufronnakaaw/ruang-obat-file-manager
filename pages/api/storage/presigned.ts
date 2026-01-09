@@ -54,10 +54,7 @@ export default async function handler(
         const key = `${body.data.folder}${file.filename}`;
 
         const command = new PutObjectCommand({
-          Bucket:
-            process.env.NEXT_PUBLIC_MODE === "prod"
-              ? "ruangobat"
-              : "ruangobatdev",
+          Bucket: process.env.STORAGE_BUCKET,
           Key: key,
           ContentType: file.type,
           ACL: "public-read",

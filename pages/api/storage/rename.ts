@@ -25,8 +25,7 @@ export default async function handler(
 
   const { oldKey, newKey, isFolder } = req.body;
 
-  const Bucket =
-    process.env.NEXT_PUBLIC_MODE === "prod" ? "ruangobat" : "ruangobatdev";
+  const Bucket = process.env.NEXT_PUBLIC_STORAGE_BUCKET;
 
   try {
     if (isFolder) {
