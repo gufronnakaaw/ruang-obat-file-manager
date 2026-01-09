@@ -14,7 +14,7 @@ export default function App({
   return (
     <>
       <Toaster />
-      <NextNProgress color="#3498db" options={{ showSpinner: false }} />
+      <NextNProgress color="#6238C3" options={{ showSpinner: false }} />
       <SessionProvider session={session} refetchOnWindowFocus={false}>
         <SWRConfig
           value={{
