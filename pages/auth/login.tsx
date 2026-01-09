@@ -1,5 +1,5 @@
 import { LogoRuangObat } from "@/components/LogoRuangObat";
-import { getError } from "@/utils/getError";
+import { getError } from "@/utils/string.util";
 import { Button, Input } from "@heroui/react";
 import {
   EyeIcon,
